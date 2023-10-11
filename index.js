@@ -63,19 +63,18 @@ app.post('/login', (req, res) => {
 
 app.post('/register', (req, res) => {
   console.log(req.body)
-  if (req.body.username === user.username) {
-    if (req.body.password === user.password) {
-      res.send({
-        status: 200,
-        message: 'Authorized'
-      })
-    }
-  } else {
-    res.send({
-      status: 401,
-      message: 'Unauthorized'
-    })
-  }
+
+  users.push({
+    username: req.body.username,
+    password: req.body.password,
+    email: req.body.email
+  })
+
+  res.send({
+    status: 200,
+    message: 'Account created'
+  })
+
 })
 
 app.get('/satellites', (req, res) => {
