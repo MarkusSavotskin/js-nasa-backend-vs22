@@ -48,88 +48,126 @@ https.createServer(options, app).listen(8082, () => {
   console.log('NSAT backend app listening at https://localhost:8082');
 });
 
-app.get('/hello', (req, res) => {
-  const data = 'Hello world!';
-  console.log(data);
-  res.send(data);
-});
+app.post('/register', encodeUrl, (req, res) => {
+  var userName = req.body.userName;
+  var password = req.body.password;
+  var email = req.body.email;
 
-app.post('/login', encodeUrl, (req, res) => {
-  const { userName, password } = req.body;
-
-  const sql = 'SELECT * FROM users WHERE username = ?';
-  con.execute(sql, [userName], (err, result) => {
-    if (err) {
+  con.connect(function(err) {
+    if (err){
       console.log(err);
-      return;
     }
-
-    if (result.length === 1) {
-      const storedHash = result[0].password;
-
-      bcrypt.compare(password, storedHash, (err, bcryptResult) => {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        if (bcryptResult) {
+    // checking user already registered or no
+    con.query(`SELECT * FROM users WHERE username = '${userName}' AND password  = '${password}'`, function(err, result){
+      if(err){
+        console.log(err);
+      }
+      if(Object.keys(result).length > 0){
+        res.sendFile(__dirname + '/failReg.html');
+      }else{
+        //creating user page in userPage function
+        function userPage(){
+          // We create a session for the dashboard (user page) page and save the user data to this session:
           req.session.user = {
-            email: result[0].email,
             username: userName,
-            password: storedHash
+            password: password,
+            email: email
           };
 
           res.send(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <title>Dashboard</title>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-            </head>
-            <body>
-                <div class="container">
-                    <h3>Hi, ${req.session.user.username} ${req.session.user.email}</h3>
-                    <a href="/">Log out</a>
-                </div>
-            </body>
-            </html>
-          `);
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <title>Login and register form with Node.js, Express.js and MySQL</title>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+                </head>
+                <body>
+                    <div class="container">
+                        <h3>Hi, ${req.session.user.username} ${req.session.user.email}</h3>
+                        <a href="/">Log out</a>
+                    </div>
+                </body>
+                </html>
+                `);
         }
-      });
-    }
-  });
-});
-
-app.post('/register', encodeUrl, (req, res) => {
-  const { email, username, password } = req.body;
-
-  const query = 'SELECT * FROM users WHERE username = ?';
-  con.execute(query, [username], (err, result) => {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (result.length === 0) {
-      bcrypt.hash(password, 10, (err, hash) => {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        const sql = 'INSERT INTO users (username, password, email) VALUES (?, ?, ?)';
-        con.execute(sql, [username, hash, email], (err, result) => {
+        // inserting new user data
+        // Generate a salt and hash the password
+        bcrypt.hash(password, 10, function(err, hash) {
           if (err) {
             console.log(err);
+            // Handle error appropriately
+          } else {
+            // Insert the user with the hashed password into the database
+            var sql = `INSERT INTO users (username, password, email) VALUES ('${userName}', '${hash}', '${email}')`;
+            con.query(sql, function (err, result) {
+              if (err){
+                console.log(err);
+              } else {
+                // Call userPage() after successful registration
+                userPage();
+              }
+            });
           }
-          // You may want to send a success response here.
         });
-      });
-    } else {
-      // You may want to send a "user already exists" response here.
+
+      }
+
+    });
+  });
+
+
+});
+
+app.post("/login", encodeUrl, (req, res) => {
+  var userName = req.body.username;
+  var password = req.body.password;
+  console.log(userName, password)
+
+  con.connect(function (err) {
+    if (err) {
+      console.log(err);
     }
+    con.query(`SELECT * FROM users WHERE username = '${userName}'`, function (err, result) {
+      if (err) {
+        console.log(err);
+      }
+
+      if (result.length === 1) {
+        const storedHash = result[0].password;
+
+        // Compare the provided password with the stored hash using bcrypt
+        bcrypt.compare(password, storedHash, function (err, bcryptResult) {
+          if (err) {
+            console.log(err);
+          } else if (bcryptResult) {
+            // Passwords match, user is authenticated
+            function userPage() {
+              // Create a session for the dashboard (user page) and save user data
+              req.session.user = {
+               // email: email,  // Removed this so login confirmation would work
+                username: userName,
+                password: storedHash // Save the hashed password for consistency
+              };
+
+              //res.send(req.session.user);
+              res.send({
+                status: "OK"
+              });
+            }
+
+            userPage();
+          } else {
+            // Passwords do not match, login failed
+            res.send("Unauthorized");
+          }
+        });
+      } else {
+        // User not found, login failed
+        res.send("User not found");
+      }
+    });
   });
 });
 
