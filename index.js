@@ -44,8 +44,8 @@ const options = {
 app.use(cors());
 app.use(express.json());
 
-https.createServer(options, app).listen(8082, () => {
-  console.log('NSAT backend app listening at https://localhost:8082');
+https.createServer(options, app).listen(8081, () => {
+  console.log('NSAT backend app listening at https://localhost:8081');
 });
 
 app.post('/register', encodeUrl, (req, res) => {
