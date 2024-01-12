@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js"
+    "start": "nodemon index.js"
   },
   "keywords": [],
   "author": "",
@@ -18,8 +18,11 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "express-session": "^1.17.3",
+    "mysql": "^2.18.1",
     "mysql2": "^3.6.1",
+    "nodemon": "^3.0.2",
     "openssl": "^2.0.0",
+    "sequelize": "^6.35.2",
     "sql": "^0.78.0"
   }
 }
