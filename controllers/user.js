@@ -1,138 +1,132 @@
-const bcrypt = require("bcrypt");
-const mysql = require('mysql2');
+const bcrypt = require('bcrypt');
 
-const con = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: 'qwerty',
-    database: 'nsat'
-});
+const config = require("../config/auth.config");
+const jwt = require("jsonwebtoken");
+const jwtExpirySeconds = 300;
 
-// TODO: ORM
+const Sequelize = require('sequelize');
+const {Op} = require("sequelize");
 
-const verifyToken = (req, res) => {
-    // TODO: Tokeni kontrollimine
-}
+const models = require('../models')
 
-const loginUser = (req, res) => {
-    var userName = req.body.username;
-    var password = req.body.password;
-    console.log(userName, password)
+const loginUser = async (req, res) => {
+    const username = req.body.username;
+    const password = req.body.password;
 
-    con.connect(function (err) {
-        if (err) {
-            console.log(err);
-        }
-        con.query(`SELECT *
-                   FROM users
-                   WHERE username = '${userName}'`, function (err, result) {
-            if (err) {
-                console.log(err);
-            }
-            // TODO: Kui on mitu samanimelist kontot, paneb kood siin pange. Registreerimisel kontrollida, kas kasutaja on juba olemas.
-            if (result.length === 1) {
-                const storedHash = result[0].password;
-
-                // Compare the provided password with the stored hash using bcrypt
-                bcrypt.compare(password, storedHash, function (err, bcryptResult) {
-                    if (err) {
-                        console.log(err);
-                    } else if (bcryptResult) {
-                        // Passwords match, user is authenticated
-                        function userPage() {
-                            // Create a session for the dashboard (user page) and save user data
-                            req.session.user = {
-                                // email: email,  // Removed this so login confirmation would work
-                                username: userName,
-                                password: storedHash // Save the hashed password for consistency
-                            };
-
-                            //res.send(req.session.user);
-                            res.status(200).send({
-                                message: "User logged in",
-                                session: req.session.user
-                            });
-                        }
-
-                        userPage();
-                    } else {
-                        // Passwords do not match, login failed
-                        res.status(401).send({
-                            message: "Unauthorized"
-                        });
-                    }
-                });
-            } else {
-                // User not found, login failed
-                res.status(404).send({
-                    message: "User not found"
-                });
+    try {
+        const user = await models.User.findOne({
+            where: {
+                username: username
             }
         });
-    });
-}
-// TODO: Registreerimisel kontrollida, kas kasutaja on juba olemas. Kui on mitu samanimelist kontot, paneb kood sisselogimisel pange.
-const registerUser = (req, res) => {
-    var userName = req.body.username;
-    var password = req.body.password;
-    var email = req.body.email;
 
-    con.connect(function (err) {
-        if (err) {
-            console.log(err);
-        }
-        // checking user already registered or no
-        con.query(`SELECT *
-                   FROM users
-                   WHERE username = '${userName}'
-                     AND password = '${password}'`, function (err, result) {
-            if (err) {
-                console.log(err);
-            }
-            if (Object.keys(result).length > 0) {
-                res.sendFile(__dirname + '/failReg.html');
-            } else {
-                //creating user page in userPage function
-                function userPage() {
-                    // We create a session for the dashboard (user page) page and save the user data to this session:
-                    req.session.user = {
-                        username: userName,
-                        password: password,
-                        email: email
-                    };
+        if (user) {
+            const storedHash = user.password;
 
-                    res.status(200).send({
-                            message: "User successfully created"
-                        }
-                    )
-                };
-
-                // inserting new user data
-                // Generate a salt and hash the password
-                bcrypt.hash(password, 10, function (err, hash) {
-                    if (err) {
-                        console.log(err);
-                        // Handle error appropriately
-                    } else {
-                        // Insert the user with the hashed password into the database
-                        var sql = `INSERT INTO users (username, password, email)
-                                   VALUES ('${userName}', '${hash}', '${email}')`;
-                        con.query(sql, function (err, result) {
-                            if (err) {
-                                console.log(err);
-                            } else {
-                                // Call userPage() after successful registration
-
-                                userPage();
-                            }
-                        });
+            // Compare the provided password with the stored hash using bcrypt
+            bcrypt.compare(password, storedHash, function (err, bcryptResult) {
+                if (err) {
+                    console.log(err);
+                } else if (bcryptResult) {
+                    // Passwords match, user is authenticated
+                    const loggedInUser = {
+                        username: username,
+                        password: storedHash
                     }
-                });
 
+                    const token = jwt.sign({ loggedInUser }, config.secret, {
+                        algorithm: "HS256",
+                        expiresIn: jwtExpirySeconds,
+                    })
+
+                    console.log("User logged in successfully\n" + JSON.stringify(user));
+                    res.status(200).cookie("token", token, { maxAge: jwtExpirySeconds * 1000 }).send({
+                        message: "User logged in successfully"
+                    })
+                } else {
+                    // Passwords do not match, login failed
+                    res.status(401).send({
+                        message: "Incorrect password"
+                    });
+                }
+            })
+        } else {
+            // User not found, login failed
+            res.status(404).send({
+                message: "Username does not exist"
+            });
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).send(error.message);
+    }
+}
+
+const registerUser = async (req, res) => {
+    const username = req.body.username;
+    const password = req.body.password;
+    const email = req.body.email;
+
+    let usernameIsOk = false;
+    let emailIsOk = false;
+
+    try {
+        const users = await models.User.findAll({
+            where: {
+                username: username
             }
-
         });
-    });
+
+        if (users.length === 0) {
+            usernameIsOk = true;
+        }
+
+        const emails = await models.User.findAll({
+            where: {
+                email: email
+            }
+        });
+
+        if (emails.length === 0) {
+            emailIsOk = true;
+        }
+
+        if (usernameIsOk && emailIsOk) {
+            bcrypt.hash(password, 10, async (err, hash) => {
+                if (err) {
+                    console.error(err);
+                    return res.status(500).send(err.message);
+                }
+
+                try {
+                    const user = await models.User.create({
+                        username: username,
+                        password: hash,
+                        email: email,
+                        reg_date: new Date()
+                    });
+
+                    console.log("User registration successful\n" + JSON.stringify(user));
+                    res.send({
+                        message: "User registration successful",
+                        user: user
+                    });
+                } catch (error) {
+                    console.error(error);
+                    res.status(500).send(error.message);
+                }
+            });
+        } else {
+            res.status(409).send({
+                message: "Username or email already exists",
+                usernameIsOk: usernameIsOk,
+                emailIsOk: emailIsOk
+            });
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).send(error.message);
+    }
 }
 
 const updateUser = (req, res) => {
@@ -144,7 +138,6 @@ const deleteUser = (req, res) => {
 }
 
 module.exports = {
-    verifyToken,
     loginUser,
     registerUser,
     updateUser,

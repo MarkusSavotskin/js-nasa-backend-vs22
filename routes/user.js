@@ -5,8 +5,6 @@ const bodyParser = require("body-parser");
 
 const encodeUrl = bodyParser.urlencoded({extended: false});
 
-router.post('/verify-token', encodeUrl, userController.verifyToken)
-
 router.post('/login', encodeUrl, userController.loginUser)
 router.post('/register', encodeUrl, userController.registerUser)
 

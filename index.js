@@ -31,5 +31,7 @@ https.createServer(options, app).listen(8081, () => {
 });
 
 const userRouter = require('./routes/user')
+const tokenRouter = require('./routes/auth')
 
 app.use('/', userRouter)
+app.use('/', tokenRouter)
