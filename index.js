@@ -4,18 +4,8 @@ const fs = require('fs');
 const app = express();
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const sessions = require('express-session');
 
 app.use(express.static('public'));
-
-// Session middleware
-app.use(sessions({
-    secret: 'thisismysecrctekey',
-    saveUninitialized: true,
-    cookie: {maxAge: 1000 * 60 * 60 * 24}, // 24 hours
-    resave: false
-}));
-
 app.use(cookieParser());
 
 const options = {
